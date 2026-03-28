@@ -221,6 +221,41 @@
   const FRICTION = 0.985;
   // Minimum velocity (deg/frame) to keep spinning
   const MIN_VELOCITY = 0.1;
+  // Number of segments (pegs) on the wheel
+  const NUM_SEGMENTS = 24;
+  const SEGMENT_ANGLE = 360 / NUM_SEGMENTS;
+
+  // --- TICK SOUND ---
+  let audioCtx = null;
+  let lastSegment = 0;
+
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function playTick() {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.04);
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.06);
+  }
+
+  function checkTick() {
+    const seg = Math.floor(normalizeAngle(currentAngle) / SEGMENT_ANGLE);
+    if (seg !== lastSegment) {
+      lastSegment = seg;
+      playTick();
+    }
+  }
 
   // --- STATE ---
   let currentAngle = 0;
@@ -291,12 +326,13 @@
         return;
       }
       applyAngle();
+      checkTick();
       requestAnimationFrame(animate);
     }
     requestAnimationFrame(animate);
   }
 
-  btn.addEventListener('click', buttonSpin);
+  btn.addEventListener('click', () => { getAudioCtx(); buttonSpin(); });
 
   // =====================
   // DRAG-TO-SPIN
@@ -304,6 +340,7 @@
   function onPointerDown(e) {
     if (spinning) return;
     e.preventDefault();
+    getAudioCtx();
     dragging = true;
     velocity = 0;
     dragSamples = [];
@@ -323,6 +360,7 @@
       if (delta < -180) delta += 360;
       currentAngle = startWheelAngle + delta;
       applyAngle();
+      checkTick();
 
       // Record sample for velocity
       const now = performance.now();
@@ -381,6 +419,7 @@
     currentAngle += velocity;
     velocity *= FRICTION;
     applyAngle();
+    checkTick();
 
     if (Math.abs(velocity) < MIN_VELOCITY) {
       // Stopped
