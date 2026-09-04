@@ -224,6 +224,8 @@
   // Number of segments (pegs) on the wheel
   const NUM_SEGMENTS = 24;
   const SEGMENT_ANGLE = 360 / NUM_SEGMENTS;
+  // localStorage key holding the wheel angle where it last came to rest
+  const STORAGE_KEY = 'spinningWheel.angle';
 
   // --- TICK SOUND ---
   let audioCtx = null;
@@ -258,7 +260,7 @@
   }
 
   // --- STATE ---
-  let currentAngle = 0;
+  let currentAngle = loadSavedAngle();
   let spinning = false;  // true during button-spin or momentum coast
   let dragging = false;
   let velocity = 0;      // degrees per frame
@@ -271,6 +273,27 @@
 
   function applyAngle() {
     wheel.style.transform = `rotate(${currentAngle}deg)`;
+  }
+
+  // =====================
+  // POSITION PERSISTENCE
+  // =====================
+  function loadSavedAngle() {
+    try {
+      const saved = parseFloat(localStorage.getItem(STORAGE_KEY));
+      return Number.isFinite(saved) ? normalizeAngle(saved) : 0;
+    } catch (e) {
+      // localStorage can throw (private browsing, disabled storage)
+      return 0;
+    }
+  }
+
+  function saveAngle() {
+    try {
+      localStorage.setItem(STORAGE_KEY, String(normalizeAngle(currentAngle)));
+    } catch (e) {
+      // Ignore: persistence is a nice-to-have
+    }
   }
 
   // --- Get the wheel center in page coordinates ---
@@ -319,6 +342,7 @@
       } else {
         currentAngle = normalizeAngle(startAngle + windupAngle + totalRotation);
         applyAngle();
+        saveAngle();
         spinning = false;
         btn.disabled = false;
         if (isWinningAngle(currentAngle)) launchConfetti();
@@ -399,6 +423,7 @@
         // Dropped with no momentum: check win at current position
         currentAngle = normalizeAngle(currentAngle);
         applyAngle();
+        saveAngle();
         if (isWinningAngle(currentAngle)) launchConfetti();
         else showComicLose();
       }
@@ -426,6 +451,7 @@
       velocity = 0;
       currentAngle = normalizeAngle(currentAngle);
       applyAngle();
+      saveAngle();
       spinning = false;
       btn.disabled = false;
       if (isWinningAngle(currentAngle)) launchConfetti();
@@ -629,6 +655,14 @@
     }
     drawConfetti();
   }
+
+  // =====================
+  // INIT
+  // =====================
+  // Render the restored angle and align the tick tracker so the first
+  // segment crossing after a reload doesn't fire a spurious tick.
+  applyAngle();
+  lastSegment = Math.floor(normalizeAngle(currentAngle) / SEGMENT_ANGLE);
 
   window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
